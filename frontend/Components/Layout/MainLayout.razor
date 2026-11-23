@@ -1,0 +1,50 @@
+﻿@inherits LayoutComponentBase
+@inject AuthSession Session
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized>
+        @if (Session.User!.MustChangePassword)
+        {
+            <RedirectTo Url="change-password" />
+        }
+        else
+        {
+            <header class="border-bottom bg-white">
+                <div class="container d-flex align-items-center gap-3 py-2">
+                    <a href="" class="fs-5 fw-semibold text-decoration-none text-dark">e-Campus</a>
+                    <div class="ms-auto d-flex align-items-center gap-3">
+                        <span class="d-none d-sm-inline small">@Session.User.FullName</span>
+                        <span class="badge text-bg-secondary">@Roles.Label(Session.User.Role)</span>
+                        <a href="change-password" class="btn btn-sm btn-link">Mon mot de passe</a>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="LogoutAsync">Déconnexion</button>
+                    </div>
+                </div>
+            </header>
+            <main class="container py-4">
+                @Body
+            </main>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <RedirectTo Url="login" />
+    </NotAuthorized>
+    <Authorizing>
+        <p class="p-5 text-center text-muted">Chargement…</p>
+    </Authorizing>
+</AuthorizeView>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Une erreur est survenue.
+    <a href="." class="reload">Recharger</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private async Task LogoutAsync()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("login", replace: true);
+    }
+}

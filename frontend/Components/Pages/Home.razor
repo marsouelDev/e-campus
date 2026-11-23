@@ -1,0 +1,14 @@
+﻿@page "/"
+@inject AuthSession Session
+
+<PageTitle>Accueil · e-Campus</PageTitle>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h1 class="h3">Bienvenue, @Session.User?.FullName</h1>
+        <p class="mb-0 text-muted">
+            Connecté en tant que <span class="badge text-bg-secondary">@Roles.Label(Session.User?.Role ?? "")</span>
+            (@Session.User?.Email)
+        </p>
+    </div>
+</div>

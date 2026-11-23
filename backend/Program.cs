@@ -1,62 +1,137 @@
-
+using System.Security.Claims;
+using System.Text;
 using Backend.Data;
+using Backend.Models;
+using Backend.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
+var config = builder.Configuration;
 
-// ========================================
-// 1. CONFIGURATION DE MYSQL
-// ========================================
-
-var connectionString = builder.Configuration
-    .GetConnectionString("DefaultConnection")
+// --- MySQL ---
+var connStr = config.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
-        "La chaîne de connexion MySQL est introuvable."
-    );
+        "ConnectionStrings:DefaultConnection est manquante (docker-compose, .env ou user-secrets).");
+builder.Services.AddDbContext<ApplicationDbContext>(opt =>
+    opt.UseMySql(connStr, new MySqlServerVersion(new Version(8, 0, 36))));
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(
-        connectionString,
-        ServerVersion.AutoDetect(connectionString)
-    )
-);
-
-// ========================================
-// 2. CONFIGURATION DES SERVICES
-// ========================================
-
+// --- Services ---
+builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<EmailService>();
 builder.Services.AddControllers();
-
-// Configuration Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
-// ========================================
-// 3. CONSTRUCTION DE L'APPLICATION
-// ========================================
+// --- Swagger avec bouton Authorize ---
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Colle uniquement le token (sans le mot Bearer)."
+    });
+
+    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", doc)] = []
+    });
+});
+
+// --- JWT ---
+var jwtKey = config["Jwt:Key"]
+    ?? throw new InvalidOperationException("Jwt:Key est manquante (docker-compose, .env ou user-secrets).");
+var jwtIssuer = config["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("Jwt:Issuer est manquante.");
+var jwtAudience = config["Jwt:Audience"]
+    ?? throw new InvalidOperationException("Jwt:Audience est manquante.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opt =>
+    {
+        opt.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+
+        // À chaque requête : le compte existe-t-il toujours et est-il actif ?
+        opt.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async ctx =>
+            {
+                var db = ctx.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
+                var idText = ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                var active = int.TryParse(idText, out var id)
+                    && await db.Users.AsNoTracking().AnyAsync(u => u.Id == id && u.IsActive);
+
+                if (!active) ctx.Fail("Compte désactivé ou supprimé.");
+            }
+        };
+    });
+builder.Services.AddAuthorization();
+
+//  CORS : les adresses du frontend viennent de la configuration 
+var frontendUrls = config.GetSection("App:FrontendUrls").Get<string[]>()
+    ?? new[] { config["App:FrontendUrl"] ?? "http://localhost:3000" };
+
+builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
+    p.WithOrigins(frontendUrls.Select(u => u.TrimEnd('/')).ToArray())
+     .AllowAnyHeader()
+     .AllowAnyMethod()));
 
 var app = builder.Build();
 
-// ========================================
-// 4. CONFIGURATION DU PIPELINE HTTP
-// ========================================
+//  Migrations + premier admin 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+
+    var adminEmail = config["SeedAdmin:Email"];
+    var adminPassword = config["SeedAdmin:Password"];
+
+    if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
+    {
+        app.Logger.LogWarning("SeedAdmin non configuré : aucun admin créé.");
+    }
+    else if (!db.Users.Any(u => u.Email == adminEmail))
+    {
+        db.Users.Add(new User
+        {
+            Email = adminEmail,
+            FullName = config["SeedAdmin:FullName"] ?? "Administrateur",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+            Role = Roles.Admin,
+            MustChangePassword = false
+        });
+        db.SaveChanges();
+    }
+}
 
 if (app.Environment.IsDevelopment())
 {
-    // Activer Swagger
     app.UseSwagger();
-
-    // Activer l'interface Swagger UI
     app.UseSwaggerUI();
 }
+else
+{
+    app.UseHttpsRedirection();   // en production uniquement
+}
 
-app.UseHttpsRedirection();
-
-// Activer les contrôleurs
+app.UseCors();
+app.UseAuthentication();   // "qui es-tu ?"
+app.UseAuthorization();    // "as-tu le droit ?"
 app.MapControllers();
-
-// ========================================
-// 5. DÉMARRAGE DU SERVEUR
-// ========================================
-
 app.Run();
