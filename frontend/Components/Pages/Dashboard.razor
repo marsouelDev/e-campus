@@ -1,0 +1,18 @@
+@page "/dashboard"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject AuthSession Session
+
+<PageTitle>Tableau de bord · e-Campus</PageTitle>
+
+@{
+    var user = Session.User;
+}
+
+<div class="mb-4">
+    <h1 class="h3 mb-1">Bonjour @user?.FullName</h1>
+    <p class="text-muted mb-0">
+        Bienvenue sur e-Campus@(user is null ? "" : $" · {Roles.Label(user.Role)}").
+    </p>
+</div>
+

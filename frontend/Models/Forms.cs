@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 
 namespace Frontend.Models;
 
@@ -32,10 +33,13 @@ public sealed class ChangePasswordForm : IValidatableObject
     }
 }
 
-public sealed class CreateUserForm
+public sealed class UserForm
 {
+    public int? Id { get; set; }                      
+    public bool IsEdit => Id is not null;
+
     [Required(ErrorMessage = "Le nom est obligatoire")]
-    [StringLength(150, MinimumLength = 2, ErrorMessage = "Entre 2 et 150 caractères")]
+    [StringLength(150, MinimumLength = 6, ErrorMessage = "Entre 2 et 150 caractères")]
     public string FullName { get; set; } = "";
 
     [Required(ErrorMessage = "L'email est obligatoire")]
@@ -48,4 +52,46 @@ public sealed class CreateUserForm
 
     [StringLength(30, ErrorMessage = "30 caractères maximum")]
     public string? Phone { get; set; }
+
+    public bool IsActive { get; set; } = true;
+
+    // Étudiant
+    public DateOnly? BirthDate { get; set; }
+    [StringLength(100, ErrorMessage = "100 caractères maximum")]
+    public string? ClassName { get; set; }
+    public List<int> ParentIds { get; set; } = [];
+
+    // Enseignant
+    [StringLength(100, ErrorMessage = "100 caractères maximum")]
+    public string? Speciality { get; set; }
+
+    // Responsable
+    [StringLength(100, ErrorMessage = "100 caractères maximum")]
+    public string? Department { get; set; }
+
+    // Parent
+    [StringLength(100, ErrorMessage = "100 caractères maximum")]
+    public string? Profession { get; set; }
+    [StringLength(255, ErrorMessage = "255 caractères maximum")]
+    public string? Address { get; set; }
+
+    public static UserForm From(UserResponse u) => new()
+    {
+        Id = u.Id,
+        FullName = u.FullName,
+        Email = u.Email,
+        Role = u.Role,
+        Phone = u.Phone,
+        IsActive = u.IsActive,
+        BirthDate = ParseDate(u.BirthDate),
+        ClassName = u.ClassName,
+        ParentIds = [.. u.ParentIds ?? []],
+        Speciality = u.Speciality,
+        Department = u.Department,
+        Profession = u.Profession,
+        Address = u.Address,
+    };
+
+    private static DateOnly? ParseDate(string? s) =>
+        s is { Length: >= 10 } && DateOnly.TryParse(s[..10], CultureInfo.InvariantCulture, out var d) ? d : null;
 }

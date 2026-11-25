@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
 @inject AuthSession Session
 @inject AuthService Auth
 @inject NavigationManager Nav
@@ -11,40 +12,187 @@
         }
         else
         {
-            <header class="border-bottom bg-white">
-                <div class="container d-flex align-items-center gap-3 py-2">
-                    <a href="" class="fs-5 fw-semibold text-decoration-none text-dark">e-Campus</a>
-                    <div class="ms-auto d-flex align-items-center gap-3">
-                        <span class="d-none d-sm-inline small">@Session.User.FullName</span>
-                        <span class="badge text-bg-secondary">@Roles.Label(Session.User.Role)</span>
-                        <a href="change-password" class="btn btn-sm btn-link">Mon mot de passe</a>
-                        <button class="btn btn-sm btn-outline-secondary" @onclick="LogoutAsync">Déconnexion</button>
-                    </div>
+            var user = Session.User;
+
+            <div class="app-shell">
+                @if (sidebarOpen)
+                {
+                    <div class="sidebar-backdrop" @onclick="CloseMenus"></div>
+                }
+
+                <aside class="sidebar @(sidebarOpen ? "open" : "") @(collapsed ? "collapsed" : "")"
+                       aria-label="Navigation principale">
+                    <a href="" class="sidebar-brand" title="e-Campus">
+                        <span class="brand-mark">eC</span>
+                        <span class="label">e-Campus</span>
+                    </a>
+
+                    <nav class="sidebar-nav" @onclick="CloseMenus">
+                        <NavLink class="sidebar-link" href="" Match="NavLinkMatch.All" title="Accueil">
+                            <Icon Name="home" /> <span class="label">Accueil</span>
+                        </NavLink>
+
+                        <AuthorizeView Roles="Admin,Responsable" Context="admin">
+                            <NavLink class="sidebar-link" href="users" title="Utilisateurs">
+                                <Icon Name="users" /> <span class="label">Utilisateurs</span>
+                            </NavLink>
+                        </AuthorizeView>
+                    </nav>
+                </aside>
+
+                <div class="app-main">
+                    <header class="topbar">
+                        @* Mobile*@
+                        <button class="icon-button d-lg-none" @onclick="ToggleSidebar" aria-label="Ouvrir le menu">
+                            <Icon Name="menu" Size="22" />
+                        </button>
+
+                        @* Ordinateur (icônes seules reduit ) *@
+                        <button class="icon-button d-none d-lg-inline-flex" @onclick="ToggleCollapse"
+                                aria-label="@(collapsed ? "Agrandir le menu" : "Réduire le menu")"
+                                title="@(collapsed ? "Agrandir le menu" : "Réduire le menu")"
+                                aria-expanded="@(collapsed ? "false" : "true")">
+                            <Icon Name="menu" Size="22" />
+                        </button>
+
+                        <span class="fw-semibold d-lg-none">e-Campus</span>
+
+                        <div class="user-menu ms-auto">
+                            <button class="user-button" @onclick="ToggleUserMenu" aria-haspopup="true"
+                                    aria-expanded="@(userMenuOpen ? "true" : "false")">
+                                <span class="avatar">@Initials(user.FullName)</span>
+                                <span class="d-none d-md-flex flex-column text-start lh-sm">
+                                    <span class="small fw-semibold">@user.FullName</span>
+                                    <span class="text-muted role-label">@Roles.Label(user.Role)</span>
+                                </span>
+                                <Icon Name="chevron" Size="16" />
+                            </button>
+
+                            @if (userMenuOpen)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenus"></div>
+                                <div class="user-dropdown" role="menu">
+                                    <div class="px-3 py-2 border-bottom">
+                                        <div class="fw-semibold small">@user.FullName</div>
+                                        <div class="text-muted small text-truncate">@user.Email</div>
+                                    </div>
+                                    <a href="change-password" class="dropdown-item-lite" role="menuitem">
+                                        <Icon Name="key" Size="16" /> Mon mot de passe
+                                    </a>
+                                    <button class="dropdown-item-lite text-danger" role="menuitem" @onclick="LogoutAsync">
+                                        <Icon Name="logout" Size="16" /> Déconnexion
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </header>
+
+                    <main class="app-content">
+                        <div class="app-content-inner">
+                            @Body
+                        </div>
+                    </main>
                 </div>
-            </header>
-            <main class="container py-4">
-                @Body
-            </main>
+            </div>
         }
     </Authorized>
     <NotAuthorized>
         <RedirectTo Url="login" />
     </NotAuthorized>
     <Authorizing>
-        <p class="p-5 text-center text-muted">Chargement…</p>
+        @* Skeleton : reprend la forme de l'application pendant la vérification de session *@
+        <div class="app-shell" role="status" aria-busy="true" aria-label="Chargement">
+            <aside class="sidebar sk-sidebar">
+                <div class="sk-brand">
+                    <span class="sk sk-logo"></span>
+                    <span class="sk sk-line sk-w-50"></span>
+                </div>
+                <div class="sk-nav">
+                    <span class="sk sk-line sk-w-30"></span>
+                    <span class="sk sk-link"></span>
+                    <span class="sk sk-line sk-w-30"></span>
+                    <span class="sk sk-link"></span>
+                    <span class="sk sk-link"></span>
+                </div>
+            </aside>
+
+            <div class="app-main">
+                <header class="topbar">
+                    <span class="sk sk-icon"></span>
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <span class="sk sk-avatar"></span>
+                        <span class="sk sk-line sk-w-120 d-none d-md-block"></span>
+                    </div>
+                </header>
+
+                <main class="app-content">
+                    <div class="app-content-inner">
+                        <span class="sk sk-title"></span>
+                        <div class="sk-cards">
+                            <span class="sk sk-card"></span>
+                            <span class="sk sk-card"></span>
+                            <span class="sk sk-card"></span>
+                        </div>
+                        <span class="sk sk-block"></span>
+                    </div>
+                </main>
+            </div>
+        </div>
     </Authorizing>
 </AuthorizeView>
 
-<div id="blazor-error-ui" data-nosnippet>
-    Une erreur est survenue.
-    <a href="." class="reload">Recharger</a>
-    <span class="dismiss">🗙</span>
-</div>
 
 @code {
+    private bool sidebarOpen; // tiroir mobile
+    private bool collapsed; // sidebar réduite (ordinateur)
+    private bool userMenuOpen;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    // Après chaque navigation, on referme la sidebar (mobile) et le menu utilisateur
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        CloseMenus();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleSidebar()
+    {
+        sidebarOpen = !sidebarOpen;
+        userMenuOpen = false;
+    }
+
+    private void ToggleCollapse()
+    {
+        collapsed = !collapsed;
+        userMenuOpen = false;
+    }
+
+    private void ToggleUserMenu() => userMenuOpen = !userMenuOpen;
+
+    private void CloseMenus()
+    {
+        sidebarOpen = false;
+        userMenuOpen = false;
+    }
+
     private async Task LogoutAsync()
     {
+        CloseMenus();
         await Auth.LogoutAsync();
         Nav.NavigateTo("login", replace: true);
     }
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant(),
+        };
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

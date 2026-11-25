@@ -28,3 +28,8 @@ cd frontend
 npm install
 # Créer .env.local avec : API_URL=
 npm run dev
+
+pour générer Tailwind proprement
+
+Arrêtez le terminal Tailwind (Ctrl+C), puis relancez-le dans D:\Project\e-campus\frontend :
+npx @tailwindcss/cli -i ./Styles/app.css -o ./wwwroot/css/tailwind.css --watch
