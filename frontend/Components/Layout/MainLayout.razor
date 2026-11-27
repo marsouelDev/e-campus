@@ -23,7 +23,6 @@
                 <aside class="sidebar @(sidebarOpen ? "open" : "") @(collapsed ? "collapsed" : "")"
                        aria-label="Navigation principale">
                     <a href="" class="sidebar-brand" title="e-Campus">
-                        <span class="brand-mark">eC</span>
                         <span class="label">e-Campus</span>
                     </a>
 
@@ -32,8 +31,8 @@
                             <Icon Name="home" /> <span class="label">Accueil</span>
                         </NavLink>
 
-                        <AuthorizeView Roles="Admin,Responsable" Context="admin">
-                            <NavLink class="sidebar-link" href="users" title="Utilisateurs">
+                        <AuthorizeView Roles="Admin,Responsable" Context="admin" >
+                            <NavLink class="sidebar-link" href="Users" title="Utilisateurs">
                                 <Icon Name="users" /> <span class="label">Utilisateurs</span>
                             </NavLink>
                         </AuthorizeView>
