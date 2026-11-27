@@ -1,18 +1,36 @@
-
 # .NET
 **/bin/
 **/obj/
 .vs/
 *.user
 *.suo
+TestResults/
 
 # Next.js
 **/node_modules/
 **/.next/
 **/out/
+*.tsbuildinfo
+next-env.d.ts
 
 # Environnements et secrets
 .env
 .env.*
 !.env.example
 **/appsettings.Development.json
+secrets.json
+*.pem
+*.key
+*.pfx
+
+# Bases de données locales et journaux
+*.db
+*.sqlite
+*.log
+npm-debug.log*
+
+# Éditeurs et système
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

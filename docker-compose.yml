@@ -1,0 +1,71 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ecampus
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${DB_PORT:-3307}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Server=db;Port=3306;Database=ecampus;User=root;Password=${MYSQL_ROOT_PASSWORD};"
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: BackendApi
+      Jwt__Audience: FrontendApp
+      DefaultUserPassword: ${DEFAULT_PASSWORD}
+      SeedAdmin__Email: ${ADMIN_EMAIL}
+      SeedAdmin__FullName: ${ADMIN_FULLNAME:-Administrateur}
+      SeedAdmin__Password: ${ADMIN_PASSWORD}
+      App__Name: E-Campus
+      App__LoginUrl: http://localhost:${WEB_PORT:-3000}/login
+      App__FrontendUrl: http://localhost:${WEB_PORT:-3000}
+      Email__Host: ${EMAIL_HOST:-mailpit}
+      Email__Port: ${EMAIL_PORT:-1025}
+      Email__Username: ${EMAIL_USER:-}
+      Email__Password: ${EMAIL_PASSWORD:-}
+      Email__FromAddress: ${EMAIL_FROM:-no-reply@ecampus.test}
+      Email__FromName: E-Campus
+    ports:
+      - "${API_PORT:-5232}:8080"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      Api__BaseUrl: http://backend:8080/api
+      DataProtection__KeysPath: /keys
+    volumes:
+      - frontend_keys:/keys
+    ports:
+      - "${WEB_PORT:-3000}:8080"
+
+volumes:
+  db_data:
+  frontend_keys:

@@ -1,0 +1,12 @@
+@* Réserve une partie de page à certains rôles. L'API reste la vraie barrière. *@
+<AuthorizeView Roles="@Roles" Context="_">
+    <Authorized>@ChildContent</Authorized>
+    <NotAuthorized>
+        <div class="alert alert-warning">Accès réservé : vous n'avez pas les droits nécessaires.</div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter, EditorRequired] public string Roles { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

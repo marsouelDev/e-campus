@@ -1,0 +1,163 @@
+<div class="modal-backdrop fade show"></div>
+<div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <EditForm Model="Form" OnValidSubmit="SubmitAsync" class="d-flex flex-column overflow-hidden">
+                <DataAnnotationsValidator />
+
+                <div class="modal-header">
+                    <h5 class="modal-title">@(Form.IsEdit ? "Modifier l'utilisateur" : "Créer un utilisateur")</h5>
+                </div>
+
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="u-name" class="form-label">Nom complet</label>
+                        <InputText id="u-name" class="form-control" @bind-Value="Form.FullName" />
+                        <ValidationMessage For="() => Form.FullName" class="text-danger small" />
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label for="u-email" class="form-label">Email</label>
+                            <InputText id="u-email" class="form-control" @bind-Value="Form.Email"
+                                       disabled="@Form.IsEdit" />
+                            <ValidationMessage For="() => Form.Email" class="text-danger small" />
+                        </div>
+                        <div class="col-md-5">
+                            <label for="u-role" class="form-label">Rôle</label>
+                            <InputSelect id="u-role" class="form-select" @bind-Value="Form.Role"
+                                         disabled="@Form.IsEdit">
+                                @foreach (var r in AllowedRoles)
+                                {
+                                    <option value="@r">@Roles.Label(r)</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => Form.Role" class="text-danger small" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="u-phone" class="form-label">Téléphone <span
+                            class="text-muted">(facultatif)</span></label>
+                            <InputText id="u-phone" class="form-control" @bind-Value="Form.Phone" />
+                            <ValidationMessage For="() => Form.Phone" class="text-danger small" />
+                        </div>
+
+                        @switch (Form.Role)
+                        {
+                            case Roles.Etudiant:
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label for="u-birth" class="form-label">Date de naissance</label>
+                                        <InputDate TValue="DateOnly?" id="u-birth" class="form-control"
+                                                   @bind-Value="Form.BirthDate" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="u-class" class="form-label">Classe</label>
+                                        <InputText id="u-class" class="form-control" @bind-Value="Form.ClassName" />
+                                        <ValidationMessage For="() => Form.ClassName" class="text-danger small" />
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Parents / tuteurs</label>
+                                    <div class="border rounded p-2" style="max-height: 150px; overflow: auto">
+                                        @if (Parents.Count == 0)
+                                        {
+                                            <span class="text-muted small">Aucun parent enregistré : créez d'abord un compte
+                                                Parent.</span>
+                                            }
+                                            @foreach (var p in Parents)
+                                            {
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="@($"parent-{p.Id}")"
+                                                           checked="@Form.ParentIds.Contains(p.Id)" @onchange="e => ToggleParent(p.Id, e)" />
+                                                    <label class="form-check-label" for="@($"parent-{p.Id}")">
+                                                        @p.FullName <span class="text-muted small">(@p.Email)</span>
+                                                    </label>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                    break;
+
+                        case Roles.Enseignant:
+                                        <div class="mb-3">
+                                            <label for="u-spec" class="form-label">Spécialité</label>
+                                            <InputText id="u-spec" class="form-control" @bind-Value="Form.Speciality" />
+                                            <ValidationMessage For="() => Form.Speciality" class="text-danger small" />
+                                        </div>
+                                        break;
+
+                                    case Roles.Responsable:
+                                        <div class="mb-3">
+                                            <label for="u-dept" class="form-label">Département</label>
+                                            <InputText id="u-dept" class="form-control" @bind-Value="Form.Department" />
+                                            <ValidationMessage For="() => Form.Department" class="text-danger small" />
+                                        </div>
+                                        break;
+
+                                    case Roles.Parent:
+                                        <div class="mb-3">
+                                            <label for="u-job" class="form-label">Profession</label>
+                                            <InputText id="u-job" class="form-control" @bind-Value="Form.Profession" />
+                                            <ValidationMessage For="() => Form.Profession" class="text-danger small" />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="u-addr" class="form-label">Adresse</label>
+                                            <InputText id="u-addr" class="form-control" @bind-Value="Form.Address" />
+                                            <ValidationMessage For="() => Form.Address" class="text-danger small" />
+                                        </div>
+                                        break;
+                                    }
+
+                                    @if (Form.IsEdit)
+                                    {
+                                        <div class="form-check form-switch mb-3">
+                                            <InputCheckbox id="u-active" class="form-check-input" @bind-Value="Form.IsActive" />
+                                            <label class="form-check-label" for="u-active">Compte actif</label>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <p class="text-muted small mb-0">
+                                            Un mot de passe par défaut sera envoyé par email. L'utilisateur devra le changer à sa première
+                                            connexion.
+                                        </p>
+                                    }
+
+                                    @if (Error is not null)
+                                    {
+                                        <div class="alert alert-danger py-2 mt-3 mb-0" role="alert">@Error</div>
+                                    }
+                                </div>
+
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="() => OnCancel.InvokeAsync()"
+                                            disabled="@Busy">Annuler</button>
+                                    <button type="submit" class="btn btn-primary" disabled="@Busy">
+                                        @(Busy ? "Enregistrement…" : Form.IsEdit ? "Enregistrer" : "Créer et envoyer les identifiants")
+                                    </button>
+                                </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+@code {
+    [Parameter, EditorRequired] public UserForm Form { get; set; } = default!;
+    [Parameter] public IReadOnlyList<UserResponse> Parents { get; set; } = [];
+    [Parameter] public IReadOnlyList<string> AllowedRoles { get; set; } = Roles.All;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Task SubmitAsync() => OnSave.InvokeAsync();
+
+    private void ToggleParent(int id, ChangeEventArgs e)
+    {
+        var selected = e.Value is true;
+        if (selected && !Form.ParentIds.Contains(id)) Form.ParentIds.Add(id);
+        if (!selected) Form.ParentIds.Remove(id);
+    }
+}

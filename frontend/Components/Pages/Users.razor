@@ -1,0 +1,322 @@
+@page "/users"
+@inject UserService UserApi
+@inject AuthSession Session
+
+<PageTitle>Utilisateurs · e-Campus</PageTitle>
+
+<RoleGuard Roles="Admin,Responsable">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <h1 class="h3 mb-0 me-auto">Utilisateurs</h1>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ Nouvel utilisateur</button>
+    </div>
+
+    @if (notice is not null)
+    {
+        <div class="alert @(noticeWarning ? "alert-warning" : "alert-success") alert-dismissible" role="status">
+            @notice
+            <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => notice = null"></button>
+        </div>
+    }
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-6">
+            <input class="form-control" placeholder="Rechercher par nom ou email…" @bind="search"
+                   @bind:event="oninput" />
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="roleFilter">
+                <option value="">Tous les rôles</option>
+                @foreach (var r in Roles.All)
+                {
+                    <option value="@r">@Roles.Label(r)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3 text-md-end text-muted small align-self-center">
+            @FilteredUsers().Count / @users.Count utilisateur(s)
+        </div>
+    </div>
+
+    @if (loadError is not null)
+    {
+        <div class="alert alert-danger d-flex align-items-center" role="alert">
+            <span class="me-auto">@loadError</span>
+            <button class="btn btn-sm btn-outline-danger" @onclick="LoadAsync">Réessayer</button>
+        </div>
+    }
+    else if (loading)
+    {
+        <p class="text-muted">Chargement…</p>
+    }
+    else
+    {
+        var rows = FilteredUsers();
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr><th>Nom</th>
+                        <th>Email</th>
+                        <th>Rôle</th>
+                        <th>Statut</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in rows)
+                    {
+                        var isSelf = u.Id == Session.User?.Id;
+                        <tr @key="u.Id">
+                            <td>
+                                @u.FullName
+                                @if (!string.IsNullOrEmpty(u.Matricule))
+                                {
+                                    <div class="text-muted small">@u.Matricule</div>
+                                }
+                            </td>
+                            <td>@u.Email</td>
+                            <td><span class="badge text-bg-secondary">@Roles.Label(u.Role)</span></td>
+                            <td>
+                                @if (!u.IsActive)
+                                {
+                                    <span class="badge text-bg-danger">Désactivé</span>
+                                }
+                                else if (u.MustChangePassword)
+                                {
+
+                                    <span class="badge text-bg-warning">Jamais connecté</span>
+                                }
+                                else
+                                {
+
+                                    <span class="badge text-bg-success">Actif</span>
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">
+                                @if (CanManage(u.Role))
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenEdit(u)">Modifier</button>
+                                    @if (!isSelf)
+                                    {
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => ToggleActiveAsync(u)">
+                                            @(u.IsActive ? "Désactiver" : "Réactiver")
+                                        </button>
+                                    }
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => toReset = u">Mot de
+                                        passe</button>
+                                        @if (!isSelf)
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => toDelete = u">Supprimer</button>
+                                        }
+                                    }
+                                else
+                                    {
+                                        <span class="text-muted small">Réservé à l'administrateur</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (rows.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-4">Aucun utilisateur.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </RoleGuard>
+
+    @if (form is not null)
+    {
+        <UserFormModal Form="form" Parents="Parents" AllowedRoles="AllowedRoles" Busy="saving" Error="formError"
+                       OnSave="SaveAsync" OnCancel="CloseForm" />
+    }
+
+    <ConfirmModal Show="@(toReset is not null)" Title="Réinitialiser le mot de passe" ConfirmText="Réinitialiser"
+                  ConfirmClass="btn-primary" Busy="busyAction" OnConfirm="ResetAsync" OnCancel="() => toReset = null">
+        Le mot de passe de <b>@toReset?.FullName</b> sera remplacé par le mot de passe par défaut, envoyé par email.
+        Il devra le changer à sa prochaine connexion.
+    </ConfirmModal>
+
+    <ConfirmModal Show="@(toDelete is not null)" Title="Supprimer l'utilisateur" ConfirmText="Supprimer" Busy="busyAction"
+                  OnConfirm="DeleteAsync" OnCancel="() => toDelete = null">
+        Supprimer définitivement <b>@toDelete?.FullName</b> ? Cette action est irréversible.
+        Pour conserver son historique, préférez « Désactiver ».
+    </ConfirmModal>
+
+@code {
+    private List<UserResponse> users = [];
+    private string search = "";
+    private string roleFilter = "";
+    private bool loading = true;
+    private string? loadError;
+
+    private string? notice;
+    private bool noticeWarning;
+
+    private UserForm? form;
+    private bool saving;
+    private string? formError;
+
+    private UserResponse? toDelete;
+    private UserResponse? toReset;
+    private bool busyAction;
+
+    // Un Responsable ne gère ni les administrateurs, ni les autres responsables (règle de l'API)
+    private bool IsAdmin => Session.User?.Role == Roles.Admin;
+    private bool CanManage(string role) => IsAdmin || !Roles.Admin.Contains(role);
+    private IReadOnlyList<string> AllowedRoles => Roles.All.Where(CanManage).ToList();
+    private IReadOnlyList<UserResponse> Parents => users.Where(u => u.Role == Roles.Parent).ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private List<UserResponse> FilteredUsers()
+    {
+        var q = search.Trim();
+        return users
+            .Where(u => roleFilter == "" || u.Role == roleFilter)
+            .Where(u => q == ""
+                || u.FullName.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || u.Email.Contains(q, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        loadError = null;
+        try
+        {
+            users = await UserApi.GetAllAsync();
+        }
+        catch (ApiException e)
+        {
+            Fail(e, message => loadError = message);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    // 401 : session expirée. On ferme la session, et le layout renvoie vers /login.
+    private void Fail(ApiException e, Action<string> show)
+    {
+        if (e.Status == HttpStatusCode.Unauthorized) Session.SignOut();
+        else show(e.Message);
+    }
+
+    private void Notify(string message, bool warning = false)
+    {
+        notice = message;
+        noticeWarning = warning;
+    }
+
+    private void OpenCreate()
+    {
+        formError = null;
+        form = new UserForm { Role = AllowedRoles.Contains(Roles.Etudiant) ? Roles.Etudiant : AllowedRoles.First() };
+    }
+
+    private void OpenEdit(UserResponse u)
+    {
+        formError = null;
+        form = UserForm.From(u);
+    }
+
+    private void CloseForm() => form = null;
+
+    private async Task SaveAsync()
+    {
+        if (form is null) return;
+        saving = true;
+        formError = null;
+        try
+        {
+            if (form.IsEdit)
+            {
+                var updated = await UserApi.UpdateAsync(form.Id!.Value, form);
+                if (updated is not null) users = users.Select(u => u.Id == updated.Id ? updated : u).ToList();
+                Notify($"« {form.FullName} » a été modifié.");
+            }
+            else
+            {
+                var result = await UserApi.CreateAsync(form);
+                users = [result.User, .. users];
+                if (result.EmailSent) Notify($"« {result.User.FullName} » a été créé : ses identifiants ont été envoyés par email.");
+                else Notify($"« {result.User.FullName} » a été créé, mais l'email n'a pas pu être envoyé. Utilisez « Mot de passe » pour réessayer.", warning: true);
+            }
+            form = null;
+        }
+        catch (ApiException e)
+        {
+            Fail(e, message => formError = message);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    // Activer / désactiver : l'API remplace tous les champs, donc on renvoie ceux de l'utilisateur
+    private async Task ToggleActiveAsync(UserResponse u)
+    {
+        var edit = UserForm.From(u);
+        edit.IsActive = !u.IsActive;
+        try
+        {
+            var updated = await UserApi.UpdateAsync(u.Id, edit);
+            if (updated is not null) users = users.Select(x => x.Id == updated.Id ? updated : x).ToList();
+            Notify($"« {u.FullName} » est maintenant {(edit.IsActive ? "actif" : "désactivé")}.");
+        }
+        catch (ApiException e)
+        {
+            Fail(e, message => Notify(message, warning: true));
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        if (toReset is null) return;
+        busyAction = true;
+        try
+        {
+            var sent = await UserApi.ResetPasswordAsync(toReset.Id);
+            if (sent) Notify($"Mot de passe de « {toReset.FullName} » réinitialisé : email envoyé.");
+            else Notify($"Mot de passe de « {toReset.FullName} » réinitialisé, mais l'email n'a pas pu être envoyé.", warning:
+true);
+            toReset = null;
+        }
+        catch (ApiException e)
+        {
+            toReset = null;
+            Fail(e, message => Notify(message, warning: true));
+        }
+        finally
+        {
+            busyAction = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (toDelete is null) return;
+        busyAction = true;
+        try
+        {
+            await UserApi.DeleteAsync(toDelete.Id);
+            users = users.Where(u => u.Id != toDelete.Id).ToList();
+            Notify($"« {toDelete.FullName} » a été supprimé.");
+            toDelete = null;
+        }
+        catch (ApiException e)
+        {
+            toDelete = null;
+            Fail(e, message => Notify(message, warning: true));
+        }
+        finally
+        {
+            busyAction = false;
+        }
+    }
+}
